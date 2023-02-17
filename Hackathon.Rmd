@@ -1,0 +1,730 @@
+---
+title: "Hackathon-IE6600-Sec01-Group5"
+author: "Shrunali,Vishnu,Subhasree "
+date: "2023-02-12"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+<b>Introduction and Problem statement</b>
+
+<p>The music industry has seen significant evolution and growth over the
+years, with each decade bringing new styles, artists, and songs to the
+forefront. In this data visualization project, we aim to shed light on
+the trends and patterns that have emerged in popular music, with a focus
+on the different elements that make up a song. Our dataset comprises of
+a comprehensive collection of Spotify music data that includes important
+attributes such as the song name, artist name, year, popularity, genre,
+and various musical features such as danceability, energy, key, and
+more.</p>
+
+<p>In the first section of this project, we will analyze the popular
+music trends of each decade, exploring the most dominant genres and
+artists that have defined the different eras. We also explore
+explicitness as a factor in songs over the decades. Our goal is to
+provide an overview of the musical landscape of each decade, giving a
+better understanding of the cultural and social context in which the
+music was produced.</p>
+
+<p>The second section of this project will delve deeper into the
+musicality of songs, providing insights into the different elements that
+contribute to the overall sound and feel of a song. We will explore
+various musical features such as musicality, loudness, speechiness, and
+more, to gain a better understanding of how these elements interact and
+influence each other.</p>
+
+<p>By utilizing data visualization techniques, we aim to present the
+insights and trends of popular music in a visually compelling and
+intuitive manner, providing a unique perspective on the history and
+evolution of music. This project serves as a valuable resource for music
+lovers, researchers, and industry professionals alike, offering a
+comprehensive analysis of popular music trends and musical features.</p>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r loading libraries, include=TRUE,message=FALSE,warning=FALSE}
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(tidyverse)
+library(reshape2)
+library(ggplot2)
+library(Hmisc)
+library(magrittr)
+library(lubridate)
+```
+
+```{r reading data, include=TRUE,message=FALSE,warning=FALSE}
+df1=read.csv("tracks.csv")
+df=read.csv("artists.csv")
+
+```
+
+```{r data cleaning begins, include=TRUE,message=FALSE,warning=FALSE}
+
+#removing the brackets to unnest the the list of values from the artist_id
+df1$id_artists = gsub("\\[", "", df1$id_artists)
+df1$id_artists = gsub("\\]", "", df1$id_artists)
+#splitting using the delimmeter ","
+df1$id_artists = strsplit(df1$id_artists, ",")
+df3 = tidyr::unnest(df1, id_artists)
+df3$id_artists = gsub("'", "", df3$id_artists)
+
+```
+
+```{r using inner join to merge two csv files, include=TRUE,message=FALSE,warning=FALSE}
+#using inner join joinning two table, artist and tracks
+spotify_data <- inner_join(df3, df, by=c('id_artists'='id' ))
+
+```
+
+```{r  renaming columns in new dataframe, include=TRUE,message=FALSE,warning=FALSE}
+spotify_data <-  spotify_data %>% rename("track_id" = "id")
+spotify_data <- spotify_data %>% rename("track_name" = "name.x")
+spotify_data <- spotify_data %>% rename("track_popularity" = "popularity.x")
+spotify_data <- spotify_data %>% rename("track_duration" = "duration_ms")
+spotify_data <- spotify_data %>% rename("track_explicit" = "explicit")
+spotify_data <- spotify_data %>% rename("track_artist" = "artists")
+spotify_data <- spotify_data %>% rename("artist_id" = "id_artists")
+spotify_data <- spotify_data %>% rename("track_release_date" = "release_date")
+spotify_data <- spotify_data %>% rename("track_danceability" = "danceability")
+spotify_data <- spotify_data %>% rename("track_energy" = "energy")
+spotify_data <- spotify_data %>% rename("track_key" = "key")
+spotify_data <- spotify_data %>% rename("track_loudness" = "loudness")
+spotify_data <- spotify_data %>% rename("track_mode" = "mode")
+spotify_data <- spotify_data %>% rename("track_speechiness" = "speechiness")
+spotify_data <- spotify_data %>% rename("track_acousticness" = "acousticness")
+spotify_data <- spotify_data %>% rename("track_instrumentalness" = "instrumentalness")
+spotify_data <- spotify_data %>% rename("track_liveness" = "liveness")
+spotify_data <- spotify_data %>% rename("track_valence" = "valence")
+spotify_data <- spotify_data %>% rename("track_tempo" = "tempo")
+spotify_data <- spotify_data %>% rename("track_time_signature" = "time_signature")
+spotify_data <- spotify_data %>% rename("artist_followers" = "followers")
+spotify_data <- spotify_data %>% rename("artist_genres" = "genres")
+spotify_data <- spotify_data %>% rename("artist_name" = "name.y")
+spotify_data <- spotify_data %>% rename("artist_popularity" = "popularity.y")
+spotify_data_cleaning <- spotify_data
+```
+
+```{r data cleaning, include=TRUE,message=FALSE,warning=FALSE}
+
+# adding a new attribute - track duration in minutes 
+spotify_data_cleaning <- spotify_data_cleaning %>% mutate(track_time = track_duration/60000)
+
+spotify_data_cleaning <- spotify_data_cleaning %>% rename("track_time_mins" = "track_time")
+# checking if any of the rows have all NA values
+spotify_data_cleaning[rowSums(is.na(spotify_data_cleaning))!=ncol(spotify_data_cleaning), ]
+
+# data column is not consist and has values like 1922 and 1922-01-01, in order to bring consistency we are adding "-01-01" to the dates given without month and day information
+# date data ranges from 1921 - 2020
+dates <- spotify_data_cleaning$track_release_date
+dates <- as.POSIXct(dates, format = "%Y-%m-%d")
+
+# first convert 1922 to 1922-01-01 and then convert it to date format and specify time zone
+date_data <- spotify_data_cleaning$track_release_date
+fixed_date <- gsub("1922","1922-01-01",date_data)
+
+spotify_data_cleaning$track_release_date <- ifelse(nchar(spotify_data_cleaning$track_release_date) == 4, paste0(spotify_data_cleaning$track_release_date, "-01-01"), spotify_data_cleaning$track_release_date)
+
+spotify_data_cleaning$track_release_date <- ymd(spotify_data_cleaning$track_release_date)
+# release date done cleaning
+# adding the changes to the original dataframe
+spotify_data <- spotify_data_cleaning
+
+```
+
+```{r scaling track features, include=TRUE,message=FALSE,warning=FALSE}
+# since the rest of the attributes have mean != 0, we think the best scaling approach should be min/max scaling
+# min_max_scaled <- (data - min(data)) / (max(data) - min(data))
+#track_key
+key_min <- min(spotify_data_cleaning$track_key)
+key_max <- max(spotify_data_cleaning$track_key)
+key_range <- key_max - key_min
+spotify_data_cleaning$track_key <- (spotify_data_cleaning$track_key - key_min)/key_range
+
+#track_loudness
+loudness_min <- min(spotify_data_cleaning$track_loudness)
+loudness_max <- max(spotify_data_cleaning$track_loudness)
+loudness_range <- loudness_max - loudness_min
+spotify_data_cleaning$track_loudness <- (spotify_data_cleaning$track_loudness - loudness_min)/loudness_range
+
+#track tempo
+tempo_min <- min(spotify_data_cleaning$track_tempo)
+tempo_max <- max(spotify_data_cleaning$track_tempo)
+tempo_range <- tempo_max - tempo_min
+spotify_data_cleaning$track_tempo <- (spotify_data_cleaning$track_tempo - tempo_min)/tempo_range
+
+# track_time_signature
+ts_min <- min(spotify_data_cleaning$track_time_signature)
+ts_max <- max(spotify_data_cleaning$track_time_signature)
+ts_range <- ts_max - ts_min
+spotify_data_cleaning$track_time_signature <- (spotify_data_cleaning$track_time_signature - ts_min)/ts_range
+
+spotify_data_cleaning <- spotify_data_cleaning[complete.cases(spotify_data_cleaning[,"track_release_date"]), ]
+# summary(spotify_data_cleaning)
+spotify_data <- spotify_data_cleaning
+```
+
+##Trend Analysis <b>Question 1: Analyze Spotify's performance since it's
+inception in 2006</b>
+
+<p><b>Aim:</b> To provide a visual representation of the distribution of
+tracks released by Spotify over different decades from 2006 to 2020.</p>
+
+```{r graph plots begin - donut chart, include=TRUE,message=FALSE,warning=FALSE}
+spotify_performance <- spotify_data %>% 
+                      mutate(track_release_date = ymd(track_release_date))%>%
+                      filter(track_release_date > ymd("2006-01-01"))
+spotify_performance[c('Year','Month','Date')]<-str_split_fixed(spotify_performance$track_release_date,"-",3)
+spotify_performance_plot <- spotify_performance[,c(2,3)]
+
+spotify_performance <- spotify_performance %>% 
+                        group_by( Year) %>%
+                        summarise(no_of_songs = n())
+spotify_performance <- filter(spotify_performance, Year < "2021")
+
+# Compute percentages
+spotify_performance$fraction <- spotify_performance$no_of_songs/sum(spotify_performance$no_of_songs)
+# Compute the cumulative percentages (top of each rectangle)
+spotify_performance$ymax = cumsum(spotify_performance$fraction)
+# Compute the bottom of each rectangle
+spotify_performance$ymin = c(0, head(spotify_performance$ymax, n=-1) )
+#compute label position
+spotify_performance$labelPosition <- (spotify_performance$ymax+spotify_performance$ymin)/2
+#compute label
+spotify_performance$label <- paste(spotify_performance$Year, "\n value: ", spotify_performance$no_of_songs)
+colors=rainbow(15)
+ggplot(spotify_performance, aes(ymax = ymax, ymin=ymin, xmax=4, xmin=3,fill=Year))+
+  geom_rect()+
+  geom_label(x=3.5, aes(y=labelPosition, label=label), size=3.5) +
+  coord_polar(theta = "y")+
+  xlim(c(2,4))+
+  ggtitle("Trends of tracks released on Spotify")+
+  theme_void() +
+  theme(legend.position = "none") + scale_fill_manual(values = c("#9400D3","#FF69B4","#FFC0CB","#FFA07A","#E0FFFF","#ADD8E6","#87CEFA","#1E90FF","#20B2AA","#90EE90","#00FF7F","#7FFF90","#7FFF00","#DAA520","#FFD700"))
+```
+
+<p><b>Conclusion:</b> The aim of this visualization is to provide a
+quick and simple way to see how the number of tracks released by Spotify
+has changed over the years, broken down by decade. By seeing the size of
+each slice, it should be easy to quickly compare the number of tracks
+released in different decades and get an overall understanding of the
+data. The donut chart depicts the evolution of the number of tracks
+released on Spotify, starting with 5304 tracks in 2006 and steadily
+rising to 12331 tracks in 2020. However, there was a slight decrease in
+the number of tracks released in 2017, which was almost a thousand less
+than the previous year.</p>
+
+<b>Question 2:</b>
+
+<p><b>Hypothesis:</b> Covid-19, also known as the novel coronavirus, a
+highly infectious respiratory illness swept across the world, affecting
+millions of people and causing widespread panic and disruption. The
+Covid-19 pandemic has had a profound impact on every aspect of life,
+from the economy and public health to the music industry. The pandemic
+not only affected physical health but also had a significant impact on
+mental health, particularly in terms of depression. Thus, we conducted
+an experiment to find the type of tracks released by Spotify in the
+years 2019 and 2020.</p>
+
+<p><b>Aim:</b> Do a comparative study for the years 2019 and 2020 in
+order to find a relation between the type of songs released on Spotify
+and people's mental health.</p>
+
+```{r covid graph boxplot with jitters, include=TRUE,message=FALSE,warning=FALSE}
+
+spotify_pandemic <- spotify_data %>% 
+                      mutate(track_release_date = ymd(track_release_date))%>%
+                      filter(track_release_date > ymd("2019-01-01") & 
+                               track_release_date < ymd("2020-12-31"))
+spotify_pandemic <- spotify_pandemic %>% group_by(track_release_date,track_valence)
+spotify_pandemic$mood <- ifelse(spotify_pandemic$track_valence > 0.5, "Happy","Sad")
+spotify_pandemic$covid_year <- ifelse(spotify_pandemic$track_release_date < "2020-01-01", "Before Covid","Covid")
+
+ggplot(spotify_pandemic, aes(x = covid_year, y = track_valence, colour = mood)) + 
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter()+ggtitle("Comparing Emotional Tone in Music Before and During the COVID-19 Pandemic")
+
+```
+
+<p><b>Conclusion</b>: The above graph is a boxplot with jitters plotted
+for two time periods - pre-covid and covid. In order to analyze the
+relation between type of tracks and the pandemic we have made use of the
+metric - valence.</p>
+
+<p>Valence - A measure from 0.0 to 1.0 describing the musical
+positiveness conveyed by a track. Tracks with high valence sound more
+positive (e.g. happy, cheerful, euphoric), while tracks with low valence
+sound more negative (e.g. sad, depressed, angry).</p>
+
+<p>During our analysis we found correlation between valence and other
+features. There is significant correlation between the following pairs.
+1) valence - danceability 2) valence - loudness 3) valence - energy</p>
+
+<p>Contrary to our belief we see no significant change in the type of
+tracks released on Spotify. Hence, our hypothesis was incorrect.</p>
+
+##Feature Analysis
+
+<b>Question 3: How are the features of a song related to one
+another?</b>
+
+```{r heatmap - graph-1 relation between song characteristics, include=TRUE,message=FALSE,warning=FALSE,echo=FALSE}
+
+df_sample=spotify_data_cleaning%>%select(track_danceability:track_time_signature)
+library(ggplot2)
+library(reshape2)
+library(plotly)
+correlation_matrix <- cor(df_sample)
+
+# Melt the correlation matrix into a dataframe
+melted_correlation_matrix <- melt(correlation_matrix)
+melted_correlation_matrix<-melted_correlation_matrix%>%rename("Track_characteristics"="Var1")
+melted_correlation_matrix<-melted_correlation_matrix%>%rename("Track_characteristics_1"="Var2")
+# Plot the heatmap
+
+p<-ggplot(data=melted_correlation_matrix, aes(x=Track_characteristics, y=Track_characteristics_1, fill=value)) + 
+  geom_tile(color="black") + geom_text(aes(label = value), color = "black", size = 1)+
+  scale_fill_gradientn(colors = hcl.colors(3, "RdYlGn")) + 
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 12, hjust=1))+ggtitle("Feature Analysis - Correlation Matrix") 
+  coord_fixed()#for square tiles i have use coord_fixes() and heatmap can be formed with the geom_title itself
+
+ggplotly(p)
+
+```
+
+<p>From the above, its observed that track loudness and track energy has
+positive correlation.Hence visualized it using scater plot</p>
+
+```{r scatterplot to show correlation between track loudness and energy,include=TRUE,message=FALSE,warning=FALSE}
+library(ggplot2)
+library(RColorBrewer)
+ggplot(data=spotify_data, aes(x=track_loudness, y=track_energy, color=track_mode)) + 
+     geom_point(size=1) + 
+     # scale_color_gradientn(colors=magma(5)) + 
+     theme(legend.position="none")+ggtitle("Correlation between track energy and track loudness")
+```
+
+<b>Conclusion</b>
+
+<p>The plot showcases the correlation between different characteristics
+of the song tracks, indicating how they are related to one another. If
+the values are close to 1, then the features are positively correlated
+and are depicted in green, such as between "track_loudness" and
+"track_energy." On the other hand, if the values are close to -1, then
+the features are negatively correlated and are shown in red, for
+instance, between "track_acousticness" and both "track_energy" and
+"track_loudness".</p>
+
+<b>Question 4: Now that we know how various features are related or not
+related to each other. Understand what drives popularity of a track and
+thus from your analysis tell if a new song is released on Spotify will
+it be popular or no.</b>
+
+```{r HEXBIN PLOT, include=TRUE,message=FALSE,warning=FALSE}
+spotify_track_artist <- spotify_data[,c(3,21,24)]
+# colnames(spotify_track_artist)
+# Load the hexbin library 
+library(hexbin)
+# Create the hexbin object
+hexbin_obj <- hexbin(y = spotify_track_artist$track_popularity, x = spotify_track_artist$artist_popularity, xbins = 15)
+
+# Create the hexbin plot
+
+ggplot(data = spotify_track_artist, aes(x=spotify_track_artist$artist_popularity,y=spotify_track_artist$track_popularity))+geom_hex(bins=18)+
+  scale_fill_gradient(low = "white", high = "red")+
+  labs(title = " Hexbin Plot for track popularity vs artist popularity", x="artist popularity",y = "track popularity")
+```
+
+<b>Conclusion:</b>
+
+<p>From the heatmap used to analyze different track features we came to
+a conclusion that the track popularity is highly dependent on the
+popularity of an artist and how many followers he/she has. This Hex Bin
+plot helps us in understanding this relation further.</p>
+
+<p>Hexbin plots take in lists of X and Y values and returns what looks
+somewhat similar to a scatter plot, the entire graphing space has been
+divided into hexagons (like a honeycomb) and all points have been
+grouped into their respective hexagonal regions with a color gradient
+indicating the density of each hexagonal area.</p>
+
+<p>From this graph we undestand that highest majority of the artists
+have very low or negligible popularity and hence popularity of their
+tracks is low. At the same time, artists with high popularity have hit
+tracks. Thus if a new song is released on Spotify, given that the track
+artist is popular the track has a good chance of becoming a hit.</p>
+
+<b>Question 5: What factors contribute to the tracks popularity of an
+popular artist?</b>
+
+```{r , include=TRUE,echo=FALSE,message=FALSE,warning=FALSE}
+
+df_s=spotify_data_cleaning%>%filter(artist_popularity==max(artist_popularity))
+df_s[c('Year','Month','Date')]<-str_split_fixed(df_s$track_release_date,"-",3)
+df_s
+
+df_s$track_popularity <- df_s$track_popularity /100
+p1<-ggplot(df_s, aes(x =track_popularity , y = track_loudness)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("Variable 2") +
+  ggtitle("Scatter Plot of track_popularity and track_loudness")+ geom_smooth(formula = y ~ x,method = "lm")
+p2<-ggplot(df_s, aes(x =track_popularity , y = track_danceability)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_danceability") +
+  ggtitle("Scatter Plot of track_popularity and track_danceability")+ geom_smooth(formula = y ~ x,method = "lm")
+p3<-ggplot(df_s, aes(x =track_popularity , y = track_energy)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_energy") +
+  ggtitle("Scatter Plot of track_popularity and track_energy")+ geom_smooth(formula = y ~ x,method = "lm")
+p4<-ggplot(df_s, aes(x =track_popularity , y = track_valence)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_valence") +
+  ggtitle("Scatter Plot of track_popularity and track_valence")+ geom_smooth(formula = y ~ x,method = "lm")
+p5<-ggplot(df_s, aes(x =track_popularity , y = track_tempo)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_tempo") +
+  ggtitle("Scatter Plot of track_popularity and track_tempo")+ geom_smooth(formula = y ~ x,method = "lm")
+p6<-ggplot(df_s, aes(x =track_popularity , y = track_instrumentalness)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_instrumentalness") +
+  ggtitle("Scatter Plot of track_popularity and track_instrumentalness")+ geom_smooth(formula = y ~ x,method = "lm")
+p7<-ggplot(df_s, aes(x =track_popularity , y = track_acousticness)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_acousticness") +
+  ggtitle("Scatter Plot oftrack_popularity and track_acousticness")+ geom_smooth(formula = y ~ x,method = "lm")
+p8<-ggplot(df_s, aes(x =track_popularity , y = track_speechiness)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_speechiness") +
+  ggtitle("Scatter Plot of Two Continuous Variables and track_speechiness")+ geom_smooth(formula = y ~ x,method = "lm")
+p9<-ggplot(df_s, aes(x =track_popularity , y = track_mode)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_mode") +
+  ggtitle("Scatter Plot of track_popularity and track_mode")+ geom_smooth(formula = y ~ x,method = "lm")
+p10<-ggplot(df_s, aes(x =track_popularity , y = track_key)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_key") +
+  ggtitle("Scatter Plot of track_popularity and track_key")+ geom_smooth(formula = y ~ x,method = "lm")
+p11<-ggplot(df_s, aes(x =track_popularity , y = track_liveness)) +
+  geom_line() +
+  scale_color_discrete(name = "track_popularity") +
+  xlab("track_popularity") +
+  ylab("track_liveness") +
+  ggtitle("Scatter Plot of track_popularity and track_liveness")+ geom_smooth(formula = y ~ x,method = "lm")
+library(gridExtra)
+library(grid)
+grid.arrange(p1,p2, p3, p4 ,p5,p6,p7,p8,p9,p10,p11,nrow=4, ncol=3)
+```
+
+<p>The line graph indicates that track characteristics do not play a
+significant role in determining the popularity of an artist's tracks</p>
+
+<b>
+
+<p>Question 6: What is the occurrence rate of track names for a leading
+artist?</p>
+
+</b>
+
+```{r graph-4 analysing frequency of tracks names of an popular artist over the years using wordcloud,include=TRUE,message=FALSE,warning=FALSE}
+df_s_1=spotify_data_cleaning
+df_s_1[c('Year','Month','Date')]<-str_split_fixed(df_s_1$track_release_date,"-",3)
+df_s_1<-df_s_1%>%filter(artist_popularity==max(artist_popularity))
+df_s_1_grp<-df_s_1%>%filter(artist_popularity==max(artist_popularity))%>%group_by(track_name)%>%summarise(total_popularity=sum(track_popularity))
+c<-df_s_1%>%group_by(track_name)%>%summarise(num=n())
+df_s_1 <- df_s_1 %>%
+    mutate(track_name = gsub(" ", "_", track_name))
+
+#install.packages("tm")
+library(tm)
+#Create a vector containing only the text
+text <- df_s_1$track_name
+# Create a corpus  
+docs <- Corpus(VectorSource(text))
+dtm <- TermDocumentMatrix(docs) 
+matrix <- as.matrix(dtm) 
+words <- sort(rowSums(matrix),decreasing=TRUE) 
+df <- data.frame(word = names(words),freq=words)
+
+set.seed(1234) # for reproducibility 
+
+#install.packages("wordcloud")
+library(wordcloud)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+
+suppressWarnings(wordcloud(words = df$word, freq = df$freq, min.freq = 1,
+                           max.words=500, random.order=FALSE, rot.per=0.35,
+                           colors=brewer.pal(8, "Dark2")))
+```
+
+<b>Conclusion</b>
+
+<p>The wordcloud visualization indicates that the track titles "hold_on"
+and "anyone" appear frequently for the artist Justin Bieber. The font
+size in the wordcloud allows us to determine which track titles occur
+most frequently and which do not. Hence, the wordcloud visual provides
+information about the occurrence rate of track names for a leading
+artist.</p>
+
+<b>
+
+<p>Question 7: What variation in track characteristics can be observed
+across the top 10 music genres?</p>
+
+</b>
+
+```{r graph-2 stacked bar graph how the track characteristics changes based on genres(top),include=TRUE,message=FALSE,warning=FALSE}
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(tidyverse)
+library(reshape2)
+
+genre_data <- spotify_data_cleaning%>%filter(artist_genres!="[]")%>%group_by(artist_genres)%>%summarise(sum_popularity = sum(track_popularity))%>%top_n(10, sum_popularity)%>%arrange(desc(sum_popularity))%>%rename(genres=artist_genres)
+
+df_sample=spotify_data_cleaning%>%select('track_danceability','track_energy','track_key','track_loudness','track_mode','track_speechiness','track_acousticness','track_instrumentalness','track_liveness','track_valence','track_tempo','track_time_signature','artist_genres')
+long_df <- melt(df_sample, id.vars = "artist_genres")
+grouped_df <- long_df %>%group_by(artist_genres,variable) %>%summarise(average = mean(value))
+
+df_sample_1<-inner_join( genre_data,grouped_df, by=c('genres'='artist_genres' ))
+
+colors <- c("#0429b3", "#2853b2", "#3c76b1", "#5199b0", "#65bcaf", "#79dfae", "#8df2ad", "#a1f5ac", "#b5f8ab", "#c9fbaa", "#deffa9", "#f2ffa8")
+
+#colors <- c("#0a3d91", "#186faf", "#2da4d4", "#48c7e0", "#63e1eb", "#7ff5f5", "#9bf9ff", "#b7feff", "#d2ffff", "#edffff", "#f7f7f7", "#ffffff")
+
+p<-ggplot(df_sample_1, aes(x =genres, y = average, fill = variable)) +
+  geom_bar(stat = "identity") +
+  ggtitle("Stacked Bar Plot of Two Categorical Variables and One Continuous Variable") +
+  xlab("genres") +
+  ylab("average")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))+scale_fill_manual(values = colors)
+ggsave("plot.png", p, width = 10, height = 10, units = "in")
+p
+
+```
+
+<b>Conclusion</b>
+
+<p>According to the Stacked bar chart, it can be noted that the "kleine
+hoerspie" genre possesses the highest values for several track features,
+including "track_danceability," "track_energy," "track_key,"
+"track_loudness," "track_mode," "track_speechiness," and
+"track_acousticness." This allows us to observe the variations in each
+track characteristic among the top 10 music genres.</p>
+
+##Time Series Analysis <b>Question 8: What is the inclination of Spotify
+users towards particular artists, and does the year of release play a
+role in shaping these preferences?</b>
+
+```{r,include=TRUE,message=FALSE,warning=FALSE}
+
+spotify_data$track_release_year = substr(spotify_data$track_release_date, 1, 4)
+
+spotify_data$track_release_year<- as.numeric(spotify_data$track_release_year)
+
+library(ggplot2)
+library(dplyr)
+
+# Group the data by decades
+spotify_data_grouped <- spotify_data %>%
+  mutate(track_release_decade = as.integer(floor(track_release_year / 10) * 10)) %>%
+  group_by(track_release_decade)
+
+spotify_data_grouped$track_release_decade<- as.numeric(spotify_data_grouped$track_release_decade)
+spotify_data_grouped<- spotify_data_grouped[complete.cases(spotify_data_grouped), ]
+spotify_data_grouped <- subset(spotify_data_grouped,track_release_decade!=1900 )
+```
+
+```{r,include=TRUE,message=FALSE,warning=FALSE}
+library(ggplot2)
+df_filtered_1 <- spotify_data_grouped %>% 
+  distinct(artist_name, .keep_all = TRUE)
+# Get the top 5 artists by popularity for each decade
+df_top5_artist <- df_filtered_1 %>%
+  group_by(track_release_decade) %>%
+  top_n(5, artist_popularity) %>%
+  ungroup()
+# Plot the dot plot
+ggplot(df_top5_artist, aes(x = reorder(artist_name, track_release_decade), y = artist_popularity)) +
+  geom_point(aes(color = as.factor(track_release_decade))) +
+  scale_color_discrete(name = "Release Decade") +
+  ggtitle("Top 5 Unique Artists by Popularity for Each Decade (1920-2020)") +
+  xlab("Artist Name") +
+  ylab("Popularity") +
+  coord_flip()
+```
+
+<b>Conclusion</b>
+
+<p>We plot the top 5 artists in each decade between 1920-2020. This plot
+also shows an increase in popularity for artists in more recent years
+compared to those in the early ones.This could be due to a few different
+factors such as the evolution of the music industry in terms of genre
+preferences, better technology used to create music, globalization of
+popular genres, etc.</p>
+
+<b> Question 9: What is the inclination of Spotify users towards
+different genres of music? Does the decade that this genre originated
+have an impact on whether people still listen to it?</b>
+
+<p>
+
+```{r,include=TRUE,message=FALSE,warning=FALSE}
+genre_data <- spotify_data_grouped %>%
+  mutate(artist_genres = str_remove_all(artist_genres, "[\\[\\]']")) %>%
+  separate_rows(artist_genres, sep = ",")
+
+genre_data$artist_genres <- ifelse(genre_data$artist_genres == "", NA, genre_data$artist_genres)
+
+genre_data<- genre_data[complete.cases(genre_data), ]
+
+genre_data <- group_by(genre_data, track_release_decade, artist_genres)
+genre_data <- summarise(genre_data, popularity = mean(artist_popularity))
+
+genre_data <- genre_data %>%
+  group_by(track_release_decade) %>%
+  top_n(5, popularity)
+```
+
+```{r,include=TRUE,message=FALSE,warning=FALSE}
+
+ggplot(genre_data, aes(x = track_release_decade, y = reorder(artist_genres, track_release_decade), fill = popularity)) + 
+  geom_tile() + 
+  xlab(label ="Decade")+
+  ylab(label ="Genre")+
+  scale_x_continuous(breaks=seq(1920, 2020, by=10)) +
+  scale_fill_gradient(name = "Popularity",low = "green", high = "black") + 
+  theme_minimal()
+
+```
+
+<b>Conclusion</b>
+
+<p>We plot the top 5 genres by popularity that originated in each decade
+between 1920-2020. What is interesting to note is that the most popular
+genres of all time on Spotify are those that originated in the 2000s.
+From the previous plot(PLOT1), we saw that artists of older decades did
+not fare well in terms of popularity, but the same trend does not apply
+to genres. This shows that artists of recent years have adapted older
+genres into their style of music to make it more appealing to the
+audience.</p>
+
+<b> Question 10: What is the popular attitude towards explicit content
+in music?</b>
+
+```{r,include=TRUE,message=FALSE,warning=FALSE}
+grouped_data <- spotify_data_grouped %>% 
+  group_by(track_release_decade) %>% 
+  summarise(mean_popularity = mean(track_popularity),
+            mean_explicit = mean(track_explicit))
+
+ggplot(grouped_data, aes(x = track_release_decade, y = mean_explicit, fill = mean_popularity)) + 
+  geom_col(show.legend = FALSE) + 
+  scale_fill_gradient(low = "green", high = "black") +
+  scale_x_continuous(breaks=seq(1920, 2020, by=10)) +
+  labs(x = "Decade", y = "Mean Explicitness", 
+       title = "Explicitness of Music Over the Decades",
+       subtitle = "1920-2020") + 
+  theme_minimal()
+```
+
+<p>
+
+To understand this better, we plot the mean for explicitness over the
+decades from 1920-2020. The mean in this case would represent the
+proportion of 1s (explicit) in the data set. So, for a given decade, if
+the mean of the explicitness variable is 0.6, this would mean that 60%
+of the tracks in the data set for that decade are explicit. By
+aggregating the mean explicitness per decade, we can see how the
+proportion of explicit tracks has changed over time and whether there
+are any trends or shifts in attitudes towards explicit content.This
+shows us that the cultural attitude towards explicit music and an
+artist's freedom of expression has increased largely, with most popular
+songs in the recent decades of the 2000s having popular tracks with
+explicit lyrics.
+
+<p>
+
+<p>To further understand the portion of explicit lyrics in top songs of
+the artists that have dominated each decade of release, we plot the
+explicitness for the top song of each artist by decade.</p>
+
+```{r,include=TRUE,message=FALSE,warning=FALSE}
+top5_artist_song <- df_top5_artist %>% 
+  group_by(track_release_decade, artist_name) %>% 
+  top_n(1,track_popularity) %>% 
+  ungroup()
+top5_artist_song$track_explicit <- ifelse(top5_artist_song$track_explicit == 0, "no", "yes")
+
+
+ggplot(top5_artist_song, aes(x = track_release_decade, y = reorder(artist_name, track_release_decade), color = track_explicit)) + 
+  geom_point(size = 2) + 
+  scale_color_manual(values = c("green", "black"), guide = FALSE) + 
+  labs(x = "Decade", y = "Artist Name", color = "Explicitness") + 
+  ggtitle("Explicitness of the Top Songs of Top 5 Artists based on the Decade the song was released") + 
+  theme_minimal()
+
+
+```
+
+<b>Conclusion </b>
+
+<p>We notice that most popular artists of recent decades do not in fact
+have explicit lyrics in their top tracks. This shows us that though
+explicit music is popular, it is not a necessity for the success of the
+song. This could be due to various factors such as the demographic of
+the audience, Spotify's recommendation algorithms, etc.</p>
+
+<b>Report Conclusion: </b>
+
+<p>
+
+In conclusion, our data visualization project based on Spotify's track
+data has revealed several interesting insights into the music industry.
+Through the use of various graphical representations, we were able to
+understand the distribution of different audio features of songs, the
+popularity of different genres, and the trend of listening behavior over
+time. Our findings showed that danceability, energy, and tempo are
+important factors that contribute to the popularity of a song, while
+hip-hop and pop music are the most streamed genres on Spotify. Moreover,
+we observed a steady growth in the number of streams over the years,
+indicating an increasing trend in the usage of Spotify and digital music
+streaming services.
+
+</P>
+
+<p>In summary, this project has provided a comprehensive view of the
+music industry and the trends that are shaping it. By utilizing data
+visualization techniques, we have been able to effectively communicate
+complex information and derive meaningful insights. We hope that these
+findings will be useful for artists, music labels, and other
+stakeholders in the industry to make informed decisions and shape the
+future of music.</p>

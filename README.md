@@ -194,13 +194,8 @@ ggplot(spotify_data, aes(x = decade, y = explicit_ratio)) +
 - **Email:** [Your Email](#)  
 
 ---
+Collaborators: 
+1. Shrunali Salian
+2. Vishnu Girish
+3. Subhasree Vemprala Sathyanarayanan
 
-### 🚀 **Final Thoughts**  
-This project provides **deep insights into Spotify’s music trends, user behavior, and song characteristics**. It’s a **perfect addition to a data science portfolio**, demonstrating **data visualization, time-series analysis, and trend discovery**.  
-
-🔥 **Drop a ⭐ on GitHub if you found this useful!**  
-
-✅ **Would you like to extend this project with sentiment analysis on song lyrics?** 🚀  
-
-### **Suggested Repo Name:**  
-🔹 **spotify-data-visualization** – Clean, professional, and directly relevant! Let me know if you prefer something more creative. 🎵✨
